@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub - Copy as Markdown
 // @namespace    me.kevinrpb.userscripts
-// @version      1.0
+// @version      1.1
 // @description  Add a button that copies a markdown link with the title of the issue.
 // @author       kevinrpb
 // @downloadURL  https://raw.githubusercontent.com/kevinrpb/userscripts/refs/heads/main/github-copy-as-markdown/github-copy-as-markdown.js
@@ -12,6 +12,7 @@
 // ==/UserScript==
 
 (() => {
+	const reactRootSelectors = ["div[data-target='react-app.reactRoot']"];
 	const containerSelectors = [
 		"div[data-component=PH_Actions] > div",
 		"#partial-discussion-header > .gh-header-show > div > .gh-header-actions",
@@ -21,6 +22,7 @@
 		"button",
 	];
 	const classesToRemove = ["js-details-target", "js-title-edit-button"];
+	const copyButtonId = "__gh-copy-md-button";
 	const titleSelectors = ["h1[data-component=PH_Title]", "h1.gh-header-title"];
 
 	const mdIconSVG =
@@ -81,6 +83,8 @@
 			newButton.classList.remove(className);
 		}
 
+		newButton.id = copyButtonId;
+
 		newButton.append(icon);
 		newButton.addEventListener("click", ({ target }) => {
 			const titleElement = _getElementBySelectors(document, titleSelectors);
@@ -100,49 +104,38 @@
 		container.append(newButton);
 	}
 
-	function _setupMutationObserver(container) {
-		const config = { attributes: false, childList: true, subtree: false };
-		const mutationCallback = (mutationList, observer) => {
-			for (const mutation of mutationList) {
-				if (mutation.type !== "childList") {
-					continue;
-				}
-
-				const copyButton = _getElementBySelectors(
-					container,
-					buttonToCopySelectors,
-				);
-				if (copyButton) {
-					_addNewButton(container, copyButton);
-
-					// We only want to add the one button
-					observer.disconnect();
-					return;
-				}
-			}
-		};
-
-		const observer = new MutationObserver(mutationCallback);
-		observer.observe(container, config);
-	}
-
 	function _tryToSetupMarkdownButton() {
 		const container = _getElementBySelectors(document, containerSelectors);
 		if (!container) {
-			return false;
+			return;
+		}
+
+		if (container.querySelector(`#${copyButtonId}`)) {
+			return;
 		}
 
 		const copyButton = _getElementBySelectors(container, buttonToCopySelectors);
 		if (copyButton) {
 			_addNewButton(container, copyButton);
-		} else {
-			_setupMutationObserver(container);
+		}
+	}
+
+	function _setupMutationObserver() {
+		const reactRoot = _getElementBySelectors(document, reactRootSelectors);
+		if (!reactRoot) {
+			return;
 		}
 
-		return true;
+		const observer = new MutationObserver(_tryToSetupMarkdownButton);
+		const config = { attributes: false, childList: true, subtree: true };
+		observer.observe(reactRoot, config);
 	}
 
-	if (!_tryToSetupMarkdownButton()) {
-		setTimeout(_tryToSetupMarkdownButton, 200);
-	}
+	// GitHub seems to refresh the initial page, re-creating the containers and all. (hydration?)
+	_setupMutationObserver();
+
+	// Force a try after a whole second in case the refresh doesn't happen.
+	setTimeout(() => {
+		_tryToSetupMarkdownButton();
+	}, 1000);
 })();
