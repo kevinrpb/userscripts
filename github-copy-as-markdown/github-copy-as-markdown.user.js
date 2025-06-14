@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         GitHub - Copy as Markdown
 // @namespace    me.kevinrpb.userscripts
-// @version      1.1
+// @version      1.2
 // @description  Add a button that copies a markdown link with the title of the issue.
 // @author       kevinrpb
-// @downloadURL  https://raw.githubusercontent.com/kevinrpb/userscripts/refs/heads/main/github-copy-as-markdown/github-copy-as-markdown.js
+// @downloadURL  https://raw.githubusercontent.com/kevinrpb/userscripts/refs/heads/main/github-copy-as-markdown/github-copy-as-markdown.user.js
 // @match        https://github.com/*/*/issues/*
 // @match        https://github.com/*/*/pull/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
