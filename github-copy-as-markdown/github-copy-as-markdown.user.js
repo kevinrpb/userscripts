@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub - Copy as Markdown
 // @namespace    me.kevinrpb.userscripts
-// @version      1.2
+// @version      1.3
 // @description  Add a button that copies a markdown link with the title of the issue.
 // @author       kevinrpb
 // @downloadURL  https://raw.githubusercontent.com/kevinrpb/userscripts/refs/heads/main/github-copy-as-markdown/github-copy-as-markdown.user.js
@@ -12,21 +12,24 @@
 // ==/UserScript==
 
 (() => {
-	const reactRootSelectors = ["div[data-target='react-app.reactRoot']"];
+	const reactRootSelectors = [
+		"div[data-target='react-app.reactRoot']",
+		"div#repo-content-pjax-container",
+	];
 	const containerSelectors = [
 		"div[data-component=PH_Actions] > div",
-		"#partial-discussion-header > .gh-header-show > div > .gh-header-actions",
+		"#partial-discussion-header > div.gh-header-show div.gh-header-actions",
 	];
-	const buttonToCopySelectors = [
+	const buttonToCopyInContainerSelectors = [
 		"button[data-component=IconButton]:nth-last-child(2)",
-		"button",
 	];
+	const buttonToCopyDocumentSelectors = ["clipboard-copy[role='button']"];
 	const classesToRemove = ["js-details-target", "js-title-edit-button"];
 	const copyButtonId = "__gh-copy-md-button";
 	const titleSelectors = ["h1[data-component=PH_Title]", "h1.gh-header-title"];
 
 	const mdIconSVG =
-		'<svg aria-hidden="true" focusable="false" class="icon-md" width="24px" height="24px" viewBox="0 0 208 128"><path style="fill:currentColor" d="M 15 0 C 6.69 0 0 6.69 0 15 L 0 113 C 0 121.31 6.69 128 15 128 L 193 128 C 201.31 128 208 121.31 208 113 L 208 15 C 208 6.69 201.31 0 193 0 L 15 0 z M 30 30 L 50 30 L 70 55 L 90 30 L 110 30 L 110 98 L 90 98 L 90 59 L 70 84 L 50 59 L 50 98 L 30 98 L 30 30 z M 145 30 L 165 30 L 165 65 L 185 65 L 155 98 L 125 65 L 145 65 L 145 30 z " /></svg>';
+		'<svg aria-hidden="true" focusable="false" class="octicon icon-md" width="24px" height="24px" viewBox="0 0 208 128"><path style="fill:currentColor" d="M 15 0 C 6.69 0 0 6.69 0 15 L 0 113 C 0 121.31 6.69 128 15 128 L 193 128 C 201.31 128 208 121.31 208 113 L 208 15 C 208 6.69 201.31 0 193 0 L 15 0 z M 30 30 L 50 30 L 70 55 L 90 30 L 110 30 L 110 98 L 90 98 L 90 59 L 70 84 L 50 59 L 50 98 L 30 98 L 30 30 z M 145 30 L 165 30 L 165 65 L 185 65 L 155 98 L 125 65 L 145 65 L 145 30 z " /></svg>';
 	const checkIconSVG =
 		'<svg aria-hidden="true" focusable="false" class="octicon octicon-check" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="display: inline-block; user-select: none; vertical-align: text-bottom; overflow: visible;"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>';
 
@@ -75,6 +78,12 @@
 		return [parts[1].trim(), parts[0].trim()];
 	}
 
+	function _getMdText(titleElement) {
+			const [issueNumber, title] = _parseTitle(titleElement.textContent);
+			const url = window.location;
+			return `[#${issueNumber} - ${title}](${url})`;
+	}
+
 	function _addNewButton(container, buttonToCopy) {
 		const newButton = buttonToCopy.cloneNode(false);
 		const icon = _getIconSVG("md");
@@ -84,6 +93,14 @@
 		}
 
 		newButton.id = copyButtonId;
+		newButton.classList.add("flex-md-order-2");
+
+		const titleElement = _getElementBySelectors(document, titleSelectors);
+		if (titleElement) {
+			const md = _getMdText(titleElement);
+
+			newButton.setAttribute("value", md);
+		}
 
 		newButton.append(icon);
 		newButton.addEventListener("click", ({ target }) => {
@@ -93,9 +110,7 @@
 				return;
 			}
 
-			const [issueNumber, title] = _parseTitle(titleElement.textContent);
-			const url = window.location;
-			const md = `[#${issueNumber} - ${title}](${url})`;
+			const md = _getMdText(titleElement);
 
 			navigator.clipboard.writeText(md);
 			_showCheck(newButton);
@@ -104,20 +119,50 @@
 		container.append(newButton);
 	}
 
-	function _tryToSetupMarkdownButton() {
-		const container = _getElementBySelectors(document, containerSelectors);
-		if (!container) {
-			return;
+	function _tryToSetupMarkdownButtonFromContainer(
+		sourceContainerSelectors,
+		targetContainerSelectors,
+		buttonSelectors,
+	) {
+		const sourceContainer = _getElementBySelectors(
+			document,
+			sourceContainerSelectors,
+		);
+		const targetContainer = _getElementBySelectors(
+			document,
+			targetContainerSelectors,
+		);
+		if (!sourceContainer || !targetContainer) {
+			return false;
 		}
 
-		if (container.querySelector(`#${copyButtonId}`)) {
-			return;
+		if (targetContainer.querySelector(`#${copyButtonId}`)) {
+			return true;
 		}
 
-		const copyButton = _getElementBySelectors(container, buttonToCopySelectors);
+		const copyButton = _getElementBySelectors(sourceContainer, buttonSelectors);
+
 		if (copyButton) {
-			_addNewButton(container, copyButton);
+			_addNewButton(targetContainer, copyButton);
+			return true;
 		}
+
+		return false;
+	}
+
+	function _tryToSetupMarkdownButton() {
+		return (
+			_tryToSetupMarkdownButtonFromContainer(
+				containerSelectors,
+				containerSelectors,
+				buttonToCopyInContainerSelectors,
+			) ||
+			_tryToSetupMarkdownButtonFromContainer(
+				reactRootSelectors,
+				containerSelectors,
+				buttonToCopyDocumentSelectors,
+			)
+		);
 	}
 
 	function _setupMutationObserver() {
